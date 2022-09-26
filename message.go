@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"strings"
 
 	somersetcountywrapper "github.com/HelixSpiral/SomersetCountyAPIWrapper"
 )
@@ -36,6 +37,37 @@ func buildMessage(log somersetcountywrapper.DispatchLog) string {
 		if log.Unit != "" {
 			message += fmt.Sprintf(" | Police Unit: %s", log.Unit)
 		}
+	}
+
+	// Should probably move this out into a config file at some point so we can update it
+	// without a code change and rebuild of the app.
+	tagWords := []string{
+		"Police",
+		"EMS",
+		"Fire",
+		"MEDICAL",
+		"EMERGENCY",
+		"911",
+		"THEFT",
+		"ACCIDENT",
+		"Complaint",
+		"DOMESTIC",
+		"ANIMAL",
+		"SUSPICIOUS",
+		"Welfare",
+		"Animal",
+		"Mischief",
+		"CITIZEN",
+		"Wildlife",
+		"SHOPLIFTING",
+		"DISTURBANCE",
+		"SMOKE",
+		"BURGLARY",
+		"TRESSPASS",
+	}
+
+	for _, y := range tagWords {
+		message = strings.Replace(message, fmt.Sprintf(" %s ", y), fmt.Sprintf(" #%s ", y), 1)
 	}
 
 	return message
