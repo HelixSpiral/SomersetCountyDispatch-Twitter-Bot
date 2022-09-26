@@ -47,7 +47,6 @@ func buildMessage(log somersetcountywrapper.DispatchLog) string {
 		"Fire",
 		"MEDICAL",
 		"EMERGENCY",
-		"911",
 		"THEFT",
 		"ACCIDENT",
 		"Complaint",
