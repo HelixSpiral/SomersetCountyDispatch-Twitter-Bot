@@ -62,7 +62,17 @@ func buildMessage(log somersetcountywrapper.DispatchLog) string {
 		"DISTURBANCE",
 		"SMOKE",
 		"BURGLARY",
-		"TRESSPASS",
+		"BURGLAR",
+		"TRESPASS",
+		"ASSIST",
+		"VEHICLE",
+		"Arrest",
+		"Intoxicated",
+		"Threatening",
+		"LARCENY",
+		"FRAUD",
+		"SCAM",
+		"Violation",
 	}
 
 	for _, y := range tagWords {
