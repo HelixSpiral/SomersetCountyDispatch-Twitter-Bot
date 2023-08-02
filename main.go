@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"log"
 	"os"
 	"strconv"
 	"strings"
@@ -30,17 +31,30 @@ func main() {
 		}
 	}
 
+	if logTmp.XAppRateLimited {
+		if logTmp.XAppLimit24HourReset < time.Now().Unix() {
+			logTmp.XAppRateLimited = false
+		}
+	}
+
 	// If the day in the cache is before today, clear the cache and remove the file.
 	if logTmp.Day < currentDate.In(loc).Day() {
 		err = os.Remove("/tmp/cache.json")
 		if err != nil {
 			panic(err)
 		}
+
+		// We need to save these values, can't reset them daily.
+		tmp1 := logTmp.XAppLimit24HourReset
+		tmp2 := logTmp.XAppRateLimited
+
 		logTmp = Cache{
 			Day:           currentDate.In(loc).Day(),
 			LastProcessed: "00-00000",
 			LogMap:        make(map[string][]somersetcountywrapper.DispatchLog),
 		}
+		logTmp.XAppLimit24HourReset = tmp1
+		logTmp.XAppRateLimited = tmp2
 	}
 
 	sw := somersetcountywrapper.NewWrapper()
@@ -87,11 +101,23 @@ func main() {
 		logTmp.LogMap[y.CallNum] = append(logTmp.LogMap[y.CallNum], y)
 	}
 
-	// We limit to 2 requests per second
-	limiter := time.Tick(time.Second / 2)
+	// We limit to 1 request every 5 seconds
+	limiter := time.Tick(time.Second * 5)
 	for _, y := range updates {
+
 		<-limiter
-		processDispatch(y)
+
+		// As long as we're not rate limited on Twitter, send it.
+		if !logTmp.XAppRateLimited {
+			err = processDispatchTwitter(y)
+			switch e := err.(type) {
+			case *RateLimitError:
+				logTmp.XAppLimit24HourReset = e.Reset
+				logTmp.XAppRateLimited = true
+			default:
+				log.Println(e)
+			}
+		}
 	}
 
 	err = writeCache("/tmp/cache.json", logTmp)
