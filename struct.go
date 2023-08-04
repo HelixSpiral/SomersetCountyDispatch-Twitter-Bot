@@ -5,11 +5,17 @@ import (
 )
 
 type Cache struct {
-	Day                  int
-	LastProcessed        string // The last CallNum we have processed
-	XAppLimit24HourReset int64
-	XAppRateLimited      bool
-	XRateLimitReset      int64
-	XRateLimited         bool
-	LogMap               map[string][]somersetcountywrapper.DispatchLog // Our cache
+	Day           int
+	LastProcessed string                                         // The last CallNum we have processed
+	LogMap        map[string][]somersetcountywrapper.DispatchLog // Our cache
+}
+
+type MqttMessage struct {
+	TwitterConsumerKey    string
+	TwitterConsumerSecret string
+	TwitterAccessToken    string
+	TwitterAccessSecret   string
+
+	Message string
+	Image   string
 }

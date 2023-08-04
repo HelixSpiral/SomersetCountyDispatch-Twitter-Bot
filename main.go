@@ -9,9 +9,25 @@ import (
 	"time"
 
 	somersetcountywrapper "github.com/HelixSpiral/SomersetCountyAPIWrapper"
+	mqtt "github.com/eclipse/paho.mqtt.golang"
 )
 
 func main() {
+	// Some initial Twitter setup
+	consumerKey := os.Getenv("CONSUMER_KEY")
+	consumerSecret := os.Getenv("CONSUMER_SECRET")
+	accessToken := os.Getenv("ACCESS_TOKEN")
+	accessSecret := os.Getenv("ACCESS_SECRET")
+
+	// Some initial MQTT setup
+	mqttBroker := os.Getenv("MQTT_BROKER")
+	mqttClientId := os.Getenv("MQTT_CLIENT_ID")
+	mqttTopic := os.Getenv("MQTT_TOPIC")
+
+	options := mqtt.NewClientOptions().AddBroker(mqttBroker).SetClientID(mqttClientId)
+	options.WriteTimeout = 20 * time.Second
+	mqttClient := mqtt.NewClient(options)
+
 	currentDate := time.Now()
 	loc, err := time.LoadLocation("EST") // Somerset County API is in EST
 	if err != nil {
@@ -31,12 +47,6 @@ func main() {
 		}
 	}
 
-	if logTmp.XAppRateLimited {
-		if logTmp.XAppLimit24HourReset < time.Now().Unix() {
-			logTmp.XAppRateLimited = false
-		}
-	}
-
 	// If the day in the cache is before today, clear the cache and remove the file.
 	if logTmp.Day < currentDate.In(loc).Day() {
 		err = os.Remove("/tmp/cache.json")
@@ -44,17 +54,11 @@ func main() {
 			panic(err)
 		}
 
-		// We need to save these values, can't reset them daily.
-		tmp1 := logTmp.XAppLimit24HourReset
-		tmp2 := logTmp.XAppRateLimited
-
 		logTmp = Cache{
 			Day:           currentDate.In(loc).Day(),
 			LastProcessed: "00-00000",
 			LogMap:        make(map[string][]somersetcountywrapper.DispatchLog),
 		}
-		logTmp.XAppLimit24HourReset = tmp1
-		logTmp.XAppRateLimited = tmp2
 	}
 
 	sw := somersetcountywrapper.NewWrapper()
@@ -101,22 +105,35 @@ func main() {
 		logTmp.LogMap[y.CallNum] = append(logTmp.LogMap[y.CallNum], y)
 	}
 
+	// Connect to the MQTT broker
+	if token := mqttClient.Connect(); token.Wait() && token.Error() != nil {
+		panic(token.Error())
+	}
+
 	// We limit to 1 request every 5 seconds
 	limiter := time.Tick(time.Second * 5)
 	for _, y := range updates {
-
 		<-limiter
 
-		// As long as we're not rate limited on Twitter, send it.
-		if !logTmp.XAppRateLimited {
-			err = processDispatchTwitter(y)
-			switch e := err.(type) {
-			case *RateLimitError:
-				logTmp.XAppLimit24HourReset = e.Reset
-				logTmp.XAppRateLimited = true
-			default:
-				log.Println(e)
-			}
+		message := buildMessage(y)
+
+		jsonMsg, err := json.Marshal(&MqttMessage{
+			TwitterConsumerKey:    consumerKey,
+			TwitterConsumerSecret: consumerSecret,
+			TwitterAccessToken:    accessToken,
+			TwitterAccessSecret:   accessSecret,
+
+			Message: message,
+		})
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		log.Println("Sending message:", message)
+		token := mqttClient.Publish(mqttTopic, 2, false, jsonMsg)
+		_ = token.Wait()
+		if token.Error() != nil {
+			panic(err)
 		}
 	}
 
@@ -124,6 +141,8 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+
+	mqttClient.Disconnect(250)
 }
 
 func readCache(f string) (Cache, error) {
